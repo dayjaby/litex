@@ -194,8 +194,18 @@ class Builder:
         bios_data = soc_core.get_mem_data(bios_file, self.soc.cpu.endianness)
         self.soc.initialize_rom(bios_data)
 
+    def _clean_build_dirs(self, gateware=True, software=True):
+        if gateware:
+            shutil.rmtree(self.gateware_dir)
+
+        if software:
+            shutil.rmtree(self.software_dir)
+
     def build(self, **kwargs):
         self.soc.platform.output_dir = self.output_dir
+        if self.compile_gateware:
+            self._clean_build_dirs()
+
         os.makedirs(self.gateware_dir, exist_ok=True)
         os.makedirs(self.software_dir, exist_ok=True)
 
