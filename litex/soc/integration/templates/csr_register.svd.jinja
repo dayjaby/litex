@@ -1,0 +1,31 @@
+<register>
+    <name>{{ simple_csr.short_numbered_name }}</name>
+    {% if bits_str is not none %}
+    <description><![CDATA[{{ bits_str | replace("\n", "__jinja2_newline__") }}]]></description>
+    {% endif %}
+    <addressOffset>{{ ns.csr_address | hex(4) }}</addressOffset>
+    <resetValue>{{ simple_csr.reset_value | hex(2) }}</resetValue>
+    <size>{{ length }}</size>
+    <fields>
+    {% if simple_csr | hasattr("fields") and simple_csr.fields | length > 0 %}
+        {% for field in simple_csr.fields %}
+        <field>
+	    <name>{{ field.name }}</name>
+	    <msb>{{ field.offset + field.size - 1 }}</msb>
+	    <bitRange>[{{ field.offset + field.size - 1 }}:0]</bitRange>
+	    <lsb>{{ field.offset }}</lsb>
+            <description><![CDATA[{{ field.description | reflow | replace("\n", "__jinja2_newline__") }}]]></description>
+	</field>
+	{% endfor %}
+    {% else %}
+        <field>
+	    <name>{{ simple_csr.short_name | lower | strip_eventmanager_field }}</name>
+	    <msb>{{ simple_csr.size - 1 }}</msb>
+	    <bitRange>[{{ simple_csr.size - 1 }}:0]</bitRange>
+	    <lsb>0</lsb>
+	</field>
+    {% endif %}
+    </fields>
+    {% set ns.csr_address = ns.csr_address + 4 %}
+</register>
+

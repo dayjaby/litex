@@ -1,0 +1,53 @@
+<peripheral>
+    <name>{{ region.name | upper }}</name>
+    <baseAddress>{{ region.origin | hex(8, True) }}</baseAddress>
+    <groupName>{{ region.name | upper }}</groupName>
+    {% if region.sections | length > 0 %}
+    <description><![CDATA[{{ region.sections[0].body() | reflow | replace("\n", "__jinja2_newline__") }}]]></description>
+    {% endif %}
+    <registers>
+    {% set ns = namespace(csr_address=0) %}
+    {% for csr in region.csrs %}
+    {% if csr | hasattr("simple_csrs") and csr.simple_csrs | length > 1 %}
+        {% for simple_csr in csr.simple_csrs %}
+            {% set nwords = (csr.size + region.busword - 1)//region.busword %}
+            {% set i = nwords - loop.index - 1 %}
+            {% set length = [csr.size - i*region.busword, region.busword] | min - 1 %}
+	    {% set name = (csr.name + str(i) if nwords > 1 else csr.name) | upper %}
+	    {% set start = i*region.busword %}
+	    {% if length > 0 %}
+	        {% set bits_str = "Bits {}-{} of `{}`." | format(start, start+length, csr.name) %}
+	    {% else %}
+	        {% set bits_str = "Bit {} of `{}`." | format(start, csr.name) %}
+	    {% endif %}
+	    {% if loop.index == 0 and csr | hasattr("description") %}
+	        {% set bits_str = bits_str + " " + csr.description %}
+	    {% endif %}
+	    {{ bits_str }}
+            {% filter indent(width=12, indentfirst=true) %}
+	    {% include 'csr_register.svd.jinja' %}
+	    {% endfilter %}
+	{% endfor %}
+    {% else %}
+        {% set simple_csr = csr %}
+        {% set length = (csr.size + region.busword - 1) // region.busword * region.busword %}
+	{% set bits_str = csr.description %}
+        {% filter indent(width=8, indentfirst=true) %}
+	{% include 'csr_register.svd.jinja' %}
+	{% endfilter %}
+    {% endif %}
+    {% endfor %}
+    </registers>
+    <addressBlock>
+        <offset>0</offset>
+        <size>{{ ns.csr_address | hex }}</size>
+        <usage>registers</usage>
+    </addressBlock>
+    {% if region.name in interrupts %}
+    <interrupt>
+       <name>{{ region.name }}</name> 
+       <value>{{ interrupts[region.name] }}</value>
+    </interrupt>
+    {% endif %}
+</peripheral>
+
