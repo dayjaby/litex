@@ -58,6 +58,8 @@ jinja_env.filters["hasattr"] = hasattr
 jinja_env.filters["reflow"] = reflow
 jinja_env.filters["strip_eventmanager_field"] = lambda s: s[3:] if s.startswith("ev_") else s
 jinja_env.globals["getattr"] = getattr
+next_power_of_2 = lambda x, at_least=None: max([1<<(x-1).bit_length()] + ([at_least] if at_least else []))
+jinja_env.globals["get_ctype"] = lambda size: "uint{}_t".format(next_power_of_2(size, at_least=8))
 
 # CPU files ----------------------------------------------------------------------------------------
 
