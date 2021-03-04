@@ -19,7 +19,7 @@ import shutil
 
 from litex import get_data_mod
 from litex.build.tools import write_to_file
-from litex.soc.integration import export, soc_core
+from litex.soc.integration import export, soc_core, jinja
 from litex.soc.cores import cpu
 
 __all__ = [
@@ -84,6 +84,7 @@ class Builder:
         self.bios_options     = bios_options
         self.generate_doc     = generate_doc
         self.software_packages = []
+        self.jinja_env         = jinja.Environment()
         for name in soc_software_packages:
             self.add_software_package(name)
 
@@ -124,17 +125,18 @@ class Builder:
                 export.get_linker_output_format(self.soc.cpu))
             write_to_file(
                 os.path.join(self.generated_dir, "regions.ld"),
-                export.get_linker_regions(self.soc.mem_regions))
+                export.get_linker_regions(self.jinja_env, self.soc.mem_regions))
 
         write_to_file(
             os.path.join(self.generated_dir, "mem.h"),
-            export.get_mem_header(self.soc.mem_regions))
+            export.get_mem_header(self.jinja_env, self.soc.mem_regions))
         write_to_file(
             os.path.join(self.generated_dir, "soc.h"),
-            export.get_soc_header(self.soc.constants))
+            export.get_soc_header(self.jinja_env, self.soc.constants))
         write_to_file(
             os.path.join(self.generated_dir, "csr.h"),
             export.get_csr_header(
+                self.jinja_env,
                 regions   = self.soc.csr_regions,
                 constants = self.soc.constants,
                 csr_base  = self.soc.mem_regions['csr'].origin
@@ -143,6 +145,7 @@ class Builder:
         write_to_file(
             os.path.join(self.generated_dir, "csr_defines.h"),
             export.get_csr_header(
+                self.jinja_env,
                 regions               = self.soc.csr_regions,
                 constants             = self.soc.constants,
                 csr_base              = self.soc.mem_regions['csr'].origin,
@@ -151,7 +154,7 @@ class Builder:
         )
         write_to_file(
             os.path.join(self.generated_dir, "git.h"),
-            export.get_git_header()
+            export.get_git_header(self.jinja_env)
         )
 
         if hasattr(self.soc, "sdram"):
@@ -175,13 +178,13 @@ class Builder:
         if self.csr_svd is not None:
             svd_dir = os.path.dirname(os.path.realpath(self.csr_svd))
             os.makedirs(svd_dir, exist_ok=True)
-            write_to_file(self.csr_svd, export.get_csr_svd(self.soc))
+            write_to_file(self.csr_svd, export.get_csr_svd(self.jinja_env, self.soc))
 
     def _generate_mem_region_map(self):
         if self.memory_x is not None:
             memory_x_dir = os.path.dirname(os.path.realpath(self.memory_x))
             os.makedirs(memory_x_dir, exist_ok=True)
-            write_to_file(self.memory_x, export.get_memory_x(self.soc))
+            write_to_file(self.memory_x, export.get_memory_x(self.jinja_env, self.soc))
 
     def _prepare_rom_software(self):
         for name, src_dir in self.software_packages:
