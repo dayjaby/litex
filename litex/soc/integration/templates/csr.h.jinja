@@ -1,18 +1,10 @@
 {{ generated_banner }}
 
-{% if with_access_functions %}
-#include <generated/soc.h>
-#include <system.h>
-{% endif %}
-
 #ifndef __GENERATED_CSR_H
 #define __GENERATED_CSR_H
 
 {% if with_access_functions %}
-#include <stdint.h>
-#ifndef CSR_ACCESSORS_DEFINED
-#include <hw/common.h>
-#endif /* ! CSR_ACCESSORS_DEFINED */
+{% include 'csr_access_includes.h.jinja' %}
 {% endif %}
 
 #ifndef CSR_BASE
