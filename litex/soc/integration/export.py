@@ -29,37 +29,9 @@ from litex.soc.interconnect.csr import CSRStatus
 
 from litex.build.tools import generated_banner
 
-from litex.soc.doc.rst import reflow
 from litex.soc.doc.module import gather_submodules, ModuleNotDocumented, DocumentedModule, DocumentedInterrupts
 from litex.soc.doc.csr import DocumentedCSRRegion
 from litex.soc.interconnect.csr import _CompoundCSR
-
-# Jinja2 Environment --------------------------------------------------------------------------------
-
-from jinja2 import Environment, FileSystemLoader
-
-script_path = os.path.dirname(os.path.realpath(__file__))
-jinja_env = Environment(
-    loader=FileSystemLoader(os.path.join(script_path, 'templates')),
-    trim_blocks=True,
-    lstrip_blocks=True
-)
-
-def hex_zfill(v, size=None, upper=False):
-    v = hex(v)
-    if upper:
-        v = v.upper()
-    if size:
-        v = "0x" + v[2:].zfill(size)
-    return v
-
-jinja_env.filters["hex"] = hex_zfill
-jinja_env.filters["hasattr"] = hasattr
-jinja_env.filters["reflow"] = reflow
-jinja_env.filters["strip_eventmanager_field"] = lambda s: s[3:] if s.startswith("ev_") else s
-jinja_env.globals["getattr"] = getattr
-next_power_of_2 = lambda x, at_least=None: max([1<<(x-1).bit_length()] + ([at_least] if at_least else []))
-jinja_env.globals["get_ctype"] = lambda size: "uint{}_t".format(next_power_of_2(size, at_least=8))
 
 # CPU files ----------------------------------------------------------------------------------------
 
@@ -127,14 +99,14 @@ def get_cpu_mak(cpu, compile_software):
 def get_linker_output_format(cpu):
     return "OUTPUT_FORMAT(\"" + cpu.linker_output_format + "\")\n"
 
-def get_linker_regions(regions):
+def get_linker_regions(jinja_env, regions):
     return jinja_env.get_template("regions.ld.jinja").render(
         regions=regions
     )
 
 # C Export -----------------------------------------------------------------------------------------
 
-def get_git_header():
+def get_git_header(jinja_env):
     from litex.build.tools import get_migen_git_revision, get_litex_git_revision
     return jinja_env.get_template("git.h.jinja").render(
         generated_banner=generated_banner("//"),
@@ -142,19 +114,19 @@ def get_git_header():
         litex_git_revision=get_litex_git_revision()
     )
 
-def get_mem_header(regions):
+def get_mem_header(jinja_env, regions):
     return jinja_env.get_template("mem.h.jinja").render(
         generated_banner=generated_banner("//"),
         regions=regions
     )
 
-def get_soc_header(constants, with_access_functions=True):
+def get_soc_header(jinja_env, constants, with_access_functions=True):
     return jinja_env.get_template("soc.h.jinja").render(
         generated_banner=generated_banner("//"),
         constants=constants
     )
 
-def get_csr_header(regions, constants, csr_base=None, with_access_functions=True):
+def get_csr_header(jinja_env, regions, constants, csr_base=None, with_access_functions=True):
     return jinja_env.get_template("csr.h.jinja").render(
         alignment=constants.get("CONFIG_CSR_ALIGNMENT", 32),
         generated_banner=generated_banner("//"),
@@ -225,7 +197,7 @@ def get_csr_csv(csr_regions={}, constants={}, mem_regions={}):
 
 # SVD Export --------------------------------------------------------------------------------------
 
-def get_csr_svd(soc, vendor="litex", name="soc", description=None):
+def get_csr_svd(jinja_env, soc, vendor="litex", name="soc", description=None):
     interrupts = {}
     for csr, irq in sorted(soc.irq.locs.items()):
         interrupts[csr] = irq
@@ -248,7 +220,7 @@ def get_csr_svd(soc, vendor="litex", name="soc", description=None):
 
 # Memory.x Export ----------------------------------------------------------------------------------
 
-def get_memory_x(soc):
+def get_memory_x(jinja_env, soc):
     return jinja_env.get_template("Memory.x.jinja").render(
         regions=soc.mem_regions,
         reset_address=soc.cpu.reset_address
