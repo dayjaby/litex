@@ -65,7 +65,8 @@ class Builder:
         csr_svd          = None,
         memory_x         = None,
         bios_options     = [],
-        generate_doc     = False):
+        generate_doc     = False,
+        jinja_templates  = []):
         self.soc = soc
 
         # From Python doc: makedirs() will become confused if the path elements to create include '..'
@@ -84,7 +85,9 @@ class Builder:
         self.bios_options     = bios_options
         self.generate_doc     = generate_doc
         self.software_packages = []
-        self.jinja_env         = jinja.Environment()
+        self.jinja_env         = jinja.Environment(
+            templates=[os.path.abspath(os.path.expanduser(path)) for path in jinja_templates]
+        )
         for name in soc_software_packages:
             self.add_software_package(name)
 
@@ -269,6 +272,7 @@ def builder_args(parser):
                         help="store Mem regions in memory-x format into the "
                              "specified file")
     parser.add_argument("--doc", action="store_true", help="Generate Documentation")
+    parser.add_argument("--jinja-templates", nargs="*")
 
 
 def builder_argdict(args):
@@ -285,4 +289,5 @@ def builder_argdict(args):
         "csr_svd":          args.csr_svd,
         "memory_x":         args.memory_x,
         "generate_doc":     args.doc,
+        "jinja_templates":  args.jinja_templates,
     }
