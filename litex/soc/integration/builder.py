@@ -66,7 +66,8 @@ class Builder:
         memory_x         = None,
         bios_options     = [],
         generate_doc     = False,
-        jinja_templates  = []):
+        jinja_templates  = [],
+        filter_templates = []):
         self.soc = soc
 
         # From Python doc: makedirs() will become confused if the path elements to create include '..'
@@ -88,6 +89,7 @@ class Builder:
         self.jinja_env         = jinja.Environment(
             templates=[os.path.abspath(os.path.expanduser(path)) for path in jinja_templates]
         )
+        self.filter_templates = filter_templates
         for name in soc_software_packages:
             self.add_software_package(name)
 
@@ -99,6 +101,8 @@ class Builder:
     def _generate_includes(self):
         os.makedirs(self.include_dir, exist_ok=True)
         os.makedirs(self.generated_dir, exist_ok=True)
+
+        generated_files = dict()
 
         if self.soc.cpu_type not in [None, "zynq7000"]:
             variables_contents = []
@@ -120,52 +124,37 @@ class Builder:
                 assert bios_option in ["TERM_NO_HIST", "TERM_MINI", "TERM_NO_COMPLETE"]
                 define(bios_option, "1")
 
-            write_to_file(
-                os.path.join(self.generated_dir, "variables.mak"),
-                "".join(variables_contents))
-            write_to_file(
-                os.path.join(self.generated_dir, "output_format.ld"),
-                export.get_linker_output_format(self.soc.cpu))
-            write_to_file(
-                os.path.join(self.generated_dir, "regions.ld"),
-                export.get_linker_regions(self.jinja_env, self.soc.mem_regions))
+            generated_files["variables.mak"] = "".join(variables_contents)
+            generated_files["output_format.ld"] = export.get_linker_output_format(self.soc.cpu)
+            generated_files["regions.ld"] = export.get_linker_regions(self.jinja_env, self.soc.mem_regions)
 
-        write_to_file(
-            os.path.join(self.generated_dir, "mem.h"),
-            export.get_mem_header(self.jinja_env, self.soc.mem_regions))
-        write_to_file(
-            os.path.join(self.generated_dir, "soc.h"),
-            export.get_soc_header(self.jinja_env, self.soc.constants))
-        write_to_file(
-            os.path.join(self.generated_dir, "csr.h"),
-            export.get_csr_header(
-                self.jinja_env,
-                regions   = self.soc.csr_regions,
-                constants = self.soc.constants,
-                csr_base  = self.soc.mem_regions['csr'].origin
-            )
+        generated_files["mem.h"] = export.get_mem_header(self.jinja_env, self.soc.mem_regions)
+        generated_files["soc.h"] = export.get_soc_header(self.jinja_env, self.soc.constants)
+        generated_files["csr.h"] = export.get_csr_header(
+            self.jinja_env,
+            regions   = self.soc.csr_regions,
+            constants = self.soc.constants,
+            csr_base  = self.soc.mem_regions['csr'].origin
         )
-        write_to_file(
-            os.path.join(self.generated_dir, "csr_defines.h"),
-            export.get_csr_header(
-                self.jinja_env,
-                regions               = self.soc.csr_regions,
-                constants             = self.soc.constants,
-                csr_base              = self.soc.mem_regions['csr'].origin,
-                with_access_functions = False
-            )
+        generated_files["csr_defines.h"] = export.get_csr_header(
+            self.jinja_env,
+            regions               = self.soc.csr_regions,
+            constants             = self.soc.constants,
+            csr_base              = self.soc.mem_regions['csr'].origin,
+            with_access_functions = False
         )
-        write_to_file(
-            os.path.join(self.generated_dir, "git.h"),
-            export.get_git_header(self.jinja_env)
-        )
+        generated_files["git.h"] = export.get_git_header(self.jinja_env)
 
         if hasattr(self.soc, "sdram"):
             from litedram.init import get_sdram_phy_c_header
-            write_to_file(os.path.join(self.generated_dir, "sdram_phy.h"),
-                get_sdram_phy_c_header(
-                    self.soc.sdram.controller.settings.phy,
-                    self.soc.sdram.controller.settings.timing))
+            generated_files["sdram_phy.h"] = get_sdram_phy_c_header(
+                self.soc.sdram.controller.settings.phy,
+                self.soc.sdram.controller.settings.timing
+            )
+
+        for filename, content in generated_files.items():
+            if len(self.filter_templates) == 0 or filename in self.filter_templates:
+                write_to_file(os.path.join(self.generated_dir, filename), content)
 
     def _generate_csr_map(self):
         if self.csr_json is not None:
@@ -273,6 +262,7 @@ def builder_args(parser):
                              "specified file")
     parser.add_argument("--doc", action="store_true", help="Generate Documentation")
     parser.add_argument("--jinja-templates", nargs="*")
+    parser.add_argument("--filter-templates", nargs="*")
 
 
 def builder_argdict(args):
@@ -290,4 +280,5 @@ def builder_argdict(args):
         "memory_x":         args.memory_x,
         "generate_doc":     args.doc,
         "jinja_templates":  args.jinja_templates,
+        "filter_templates": args.filter_templates
     }
