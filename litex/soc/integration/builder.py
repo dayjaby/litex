@@ -200,6 +200,7 @@ class Builder:
                         self.soc.bus.regions["rom"].size = self.soc.integrated_rom_size
                         self.soc.bus.regions["rom"].size_pow2 = self.soc.integrated_rom_size
                         self.soc.bus.regions["rom"].length = self.soc.integrated_rom_size
+                        self.soc.rom.mem.depth = self.soc.integrated_rom_size//(self.soc.rom.mem.width//8)
                         self.estimate_rom_size = False
 
     def _initialize_rom_software(self):
