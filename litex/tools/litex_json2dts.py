@@ -28,7 +28,6 @@ def generate_dts(d, initrd_start=None, initrd_size=None, polling=False):
 / {
         #address-cells = <1>;
         #size-cells    = <1>;
-        interrupt-parent = <&intc0>;
 
 """
 
@@ -74,7 +73,7 @@ def generate_dts(d, initrd_start=None, initrd_size=None, polling=False):
             cpu@{cpu} {{
                 device_type = "cpu";
                 compatible = "riscv";
-                riscv,isa = "rv32ima";
+                riscv,isa = "{cpu_isa}";
                 mmu-type = "riscv,sv32";
                 reg = <{cpu}>;
                 clock-frequency = <{sys_clk_freq}>;
@@ -85,9 +84,9 @@ def generate_dts(d, initrd_start=None, initrd_size=None, polling=False):
                     compatible = "riscv,cpu-intc";
                 }};
             }};
-""".format(cpu=cpu, irq=cpu, sys_clk_freq=d["constants"]["config_clock_frequency"])
+""".format(cpu=cpu, irq=cpu, sys_clk_freq=d["constants"]["config_clock_frequency"], cpu_isa=d["constants"]["cpu_isa"])
         dts += """
-    	};
+        };
 """
 
     # mor1kx
@@ -115,19 +114,33 @@ def generate_dts(d, initrd_start=None, initrd_size=None, polling=False):
     main_ram_base = d["memories"]["main_ram"]["base"],
     main_ram_size = d["memories"]["main_ram"]["size"])
 
-    if "opensbi" in d["memories"]:
+    if (("opensbi" in d["memories"]) or ("video_framebuffer" in d["csr_bases"])):
         dts += """
-        reserved-memory {{
+        reserved-memory {
             #address-cells = <1>;
             #size-cells    = <1>;
             ranges;
+"""
+        if "opensbi" in d["memories"]:
+            dts += """
             opensbi@{opensbi_base:x} {{
                 reg = <0x{opensbi_base:x} 0x{opensbi_size:x}>;
             }};
-        }};
 """.format(
     opensbi_base = d["memories"]["opensbi"]["base"],
     opensbi_size = d["memories"]["opensbi"]["size"])
+        if "video_framebuffer" in d["csr_bases"]:
+            dts += """
+            framebuffer@{framebuffer_base:x} {{
+                reg = <0x{framebuffer_base:x} 0x{framebuffer_size:x}>;
+            }};
+""".format(
+    framebuffer_base = d["constants"]["video_framebuffer_base"],
+    framebuffer_size = (d["constants"]["video_framebuffer_hres"] * d["constants"]["video_framebuffer_vres"] * 4))
+
+        dts += """
+        };
+"""
 
     # SoC ------------------------------------------------------------------------------------------
 
@@ -137,6 +150,7 @@ def generate_dts(d, initrd_start=None, initrd_size=None, polling=False):
             #size-cells    = <1>;
             bus-frequency  = <{sys_clk_freq}>;
             compatible = "simple-bus";
+            interrupt-parent = <&intc0>;
             ranges;
 """.format(sys_clk_freq=d["constants"]["config_clock_frequency"])
 
@@ -155,15 +169,16 @@ def generate_dts(d, initrd_start=None, initrd_size=None, polling=False):
     if cpu_name == "vexriscv smp-linux":
         dts += """
             intc0: interrupt-controller@{plic_base:x} {{
-                compatible = "sifive,plic-1.0.0", "sifive,fu540-c000-plic";
+                compatible = "sifive,fu540-c000-plic", "sifive,plic-1.0.0";
                 reg = <0x{plic_base:x} 0x400000>;
+                #address-cells = <0>;
                 #interrupt-cells = <1>;
                 interrupt-controller;
                 interrupts-extended = <
                     {cpu_mapping}>;
                 riscv,ndev = <32>;
             }};
-    """.format(
+""".format(
         plic_base   =d["memories"]["plic"]["base"],
         cpu_mapping =("\n" + " "*20).join(["&L{} 11 &L{} 9".format(cpu, cpu) for cpu in cpus]))
 
@@ -182,7 +197,6 @@ def generate_dts(d, initrd_start=None, initrd_size=None, polling=False):
         aliases["serial0"] = "liteuart0"
         dts += """
             liteuart0: serial@{uart_csr_base:x} {{
-                device_type = "serial";
                 compatible = "litex,liteuart";
                 reg = <0x{uart_csr_base:x} 0x100>;
                 {uart_interrupt}
@@ -200,7 +214,7 @@ def generate_dts(d, initrd_start=None, initrd_size=None, polling=False):
                 compatible = "litex,liteeth";
                 reg = <0x{ethmac_csr_base:x} 0x7c>,
                       <0x{ethphy_csr_base:x} 0x0a>,
-                      <0x{ethmac_mem_base:x} 0x2000>;
+                      <0x{ethmac_mem_base:x} 0x{ethmac_mem_size:x}>;
                 tx-fifo-depth = <{ethmac_tx_slots}>;
                 rx-fifo-depth = <{ethmac_rx_slots}>;
                 {ethmac_interrupt}
@@ -210,11 +224,26 @@ def generate_dts(d, initrd_start=None, initrd_size=None, polling=False):
     ethphy_csr_base  = d["csr_bases"]["ethphy"],
     ethmac_csr_base  = d["csr_bases"]["ethmac"],
     ethmac_mem_base  = d["memories"]["ethmac"]["base"],
+    ethmac_mem_size  = d["memories"]["ethmac"]["size"],
     ethmac_tx_slots  = d["constants"]["ethmac_tx_slots"],
     ethmac_rx_slots  = d["constants"]["ethmac_rx_slots"],
     ethmac_interrupt = "" if polling else "interrupts = <{}>;".format(d["constants"]["ethmac_interrupt"]))
 
-   # SPI Flash -------------------------------------------------------------------------------------
+    # USB OHCI -------------------------------------------------------------------------------------
+
+    if "usb_ohci_ctrl" in d["memories"]:
+        dts += """
+            usb0: mac@{usb_ohci_mem_base:x} {{
+                compatible = "generic-ohci";
+                reg = <0x{usb_ohci_mem_base:x} 0x1000>;
+                {usb_ohci_interrupt}
+                status = "okay";
+            }};
+""".format(
+    usb_ohci_mem_base  = d["memories"]["usb_ohci_ctrl"]["base"],
+    usb_ohci_interrupt = "" if polling else "interrupts = <{}>;".format(16)) # FIXME
+
+    # SPI Flash ------------------------------------------------------------------------------------
 
     if "spiflash" in d["csr_bases"]:
         aliases["spiflash"] = "litespiflash"
@@ -265,20 +294,23 @@ def generate_dts(d, initrd_start=None, initrd_size=None, polling=False):
         dts += """
             mmc0: mmc@{mmc_csr_base:x} {{
                 compatible = "litex,mmc";
-                reg = <
-                    0x{sdphy_csr_base:x} 0x100
-                    0x{sdcore_csr_base:x} 0x100
-                    0x{sdblock2mem:x} 0x100
-                    0x{sdmem2block:x} 0x100>;
+                reg = <0x{sdphy_csr_base:x} 0x100>,
+                      <0x{sdcore_csr_base:x} 0x100>,
+                      <0x{sdblock2mem:x} 0x100>,
+                      <0x{sdmem2block:x} 0x100>,
+                      <0x{sdirq:x} 0x100>;
                 bus-width = <0x04>;
+                {sdirq_interrupt}
                 status = "okay";
             }};
-    """.format(
+""".format(
         mmc_csr_base    = d["csr_bases"]["sdphy"],
         sdphy_csr_base  = d["csr_bases"]["sdphy"],
         sdcore_csr_base = d["csr_bases"]["sdcore"],
         sdblock2mem     = d["csr_bases"]["sdblock2mem"],
-        sdmem2block     = d["csr_bases"]["sdmem2block"]
+        sdmem2block     = d["csr_bases"]["sdmem2block"],
+        sdirq           = d["csr_bases"]["sdirq"],
+        sdirq_interrupt = "" if polling else "interrupts = <{}>;".format(d["constants"]["sdirq_interrupt"])
 )
     # Leds -----------------------------------------------------------------------------------------
 
@@ -287,6 +319,8 @@ def generate_dts(d, initrd_start=None, initrd_size=None, polling=False):
             leds: gpio@{leds_csr_base:x} {{
                 compatible = "litex,gpio";
                 reg = <0x{leds_csr_base:x} 0x4>;
+                gpio-controller;
+                #gpio-cells = <2>;
                 litex,direction = "out";
                 status = "disabled";
             }};
@@ -313,6 +347,8 @@ def generate_dts(d, initrd_start=None, initrd_size=None, polling=False):
             switches: gpio@{switches_csr_base:x} {{
                 compatible = "litex,gpio";
                 reg = <0x{switches_csr_base:x} 0x4>;
+                gpio-controller;
+                #gpio-cells = <2>;
                 litex,direction = "in";
                 status = "disabled";
             }};
@@ -351,6 +387,8 @@ def generate_dts(d, initrd_start=None, initrd_size=None, polling=False):
             i2c0: i2c@{i2c0_csr_base:x} {{
                 compatible = "litex,i2c";
                 reg = <0x{i2c0_csr_base:x} 0x5>;
+                #address-cells = <1>;
+                #size-cells = <0>;
                 status = "okay";
             }};
 """.format(i2c0_csr_base=d["csr_bases"]["i2c0"])
@@ -368,13 +406,12 @@ def generate_dts(d, initrd_start=None, initrd_size=None, polling=False):
 
     # Framebuffer ----------------------------------------------------------------------------------
 
-    if "framebuffer" in d["csr_bases"]:
-        # FIXME: Use dynamic framebuffer base and size
-        framebuffer_base   = 0xc8000000
-        framebuffer_width  = d["constants"]["litevideo_h_active"]
-        framebuffer_height = d["constants"]["litevideo_v_active"]
+    if "video_framebuffer" in d["csr_bases"]:
+        framebuffer_base   = d["constants"]["video_framebuffer_base"]
+        framebuffer_width  = d["constants"]["video_framebuffer_hres"]
+        framebuffer_height = d["constants"]["video_framebuffer_vres"]
         dts += """
-            framebuffer0: framebuffer@f0000000 {{
+            framebuffer0: framebuffer@{framebuffer_base:x} {{
                 compatible = "simple-framebuffer";
                 reg = <0x{framebuffer_base:x} 0x{framebuffer_size:x}>;
                 width = <{framebuffer_width}>;
@@ -388,36 +425,6 @@ def generate_dts(d, initrd_start=None, initrd_size=None, polling=False):
     framebuffer_height = framebuffer_height,
     framebuffer_size   = framebuffer_width * framebuffer_height * 4,
     framebuffer_stride = framebuffer_width * 4)
-
-        dts += """
-            litevideo0: gpu@{litevideo_base:x} {{
-                compatible = "litex,litevideo";
-                reg = <0x{litevideo_base:x} 0x100>;
-                litevideo,pixel-clock   = <{litevideo_pixel_clock}>;
-                litevideo,h-active      = <{litevideo_h_active}>;
-                litevideo,h-blanking    = <{litevideo_h_blanking}>;
-                litevideo,h-sync        = <{litevideo_h_sync}>;
-                litevideo,h-front-porch = <{litevideo_h_front_porch}>;
-                litevideo,v-active      = <{litevideo_v_active}>;
-                litevideo,v-blanking    = <{litevideo_v_blanking}>;
-                litevideo,v-sync        = <{litevideo_v_sync}>;
-                litevideo,v-front-porch = <{litevideo_v_front_porch}>;
-                litevideo,dma-offset    = <0x{litevideo_dma_offset:x}>;
-                litevideo,dma-length    = <0x{litevideo_dma_length:x}>;
-            }};
-""".format(
-    litevideo_base          = d["csr_bases"]["framebuffer"],
-    litevideo_pixel_clock   = int(d["constants"]["litevideo_pix_clk"] / 1e3),
-    litevideo_h_active      = d["constants"]["litevideo_h_active"],
-    litevideo_h_blanking    = d["constants"]["litevideo_h_blanking"],
-    litevideo_h_sync        = d["constants"]["litevideo_h_sync"],
-    litevideo_h_front_porch = d["constants"]["litevideo_h_front_porch"],
-    litevideo_v_active      = d["constants"]["litevideo_v_active"],
-    litevideo_v_blanking    = d["constants"]["litevideo_v_blanking"],
-    litevideo_v_sync        = d["constants"]["litevideo_v_sync"],
-    litevideo_v_front_porch = d["constants"]["litevideo_v_front_porch"],
-    litevideo_dma_offset    = framebuffer_base - d["memories"]["main_ram"]["base"],
-    litevideo_dma_length    = framebuffer_width * framebuffer_height * 4)
 
     # ICAP Bitstream -------------------------------------------------------------------------------
 

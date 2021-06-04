@@ -1,7 +1,7 @@
 <p align="center"><img src="https://raw.githubusercontent.com/enjoy-digital/litex/master/doc/litex.png"></p>
 
 ```
-                          Copyright 2012-2020 / Enjoy-Digital
+                          Copyright 2012-2021 / Enjoy-Digital
 ```
 [![](https://github.com/enjoy-digital/litex/workflows/ci/badge.svg)](https://github.com/enjoy-digital/litex/actions)
 ![License](https://img.shields.io/badge/License-BSD%202--Clause-orange.svg)
@@ -16,7 +16,7 @@ SoC builder to create/develop/debug FPGA SoCs in Python.
 
 **Want to get started and/or looking for documentation? Make sure to visit the [Wiki](https://github.com/enjoy-digital/litex/wiki)!**
 
-**A question or want to get in touch? Our IRC channel is [#litex at freenode.net](https://webchat.freenode.net/?channels=litex)**
+**A question or want to get in touch? Our IRC channel is [#litex at irc.libera.chat]**
 
 # Typical LiteX design flow:
 ```

@@ -33,6 +33,10 @@ from litex.soc.doc.module import gather_submodules, ModuleNotDocumented, Documen
 from litex.soc.doc.csr import DocumentedCSRRegion
 from litex.soc.interconnect.csr import _CompoundCSR
 
+# for generating a timestamp in the description field, if none is otherwise given
+import datetime
+import time
+
 # CPU files ----------------------------------------------------------------------------------------
 
 def get_cpu_mak(cpu, compile_software):
@@ -209,14 +213,105 @@ def get_csr_svd(jinja_env, soc, vendor="litex", name="soc", description=None):
             region         = region,
             csr_data_width = soc.csr.data_width)
         )
-    return jinja_env.get_template("csr.svd.jinja").render(
-        soc=soc,
-        vendor=vendor,
-        name=name,
-        description=description,
-        interrupts=interrupts,
-        documented_regions=documented_regions
-    ).replace("__jinja2_newline__", "\n")
+
+    svd = []
+    svd.append('<?xml version="1.0" encoding="utf-8"?>')
+    svd.append('')
+    svd.append('<device schemaVersion="1.1" xmlns:xs="http://www.w3.org/2001/XMLSchema-instance" xs:noNamespaceSchemaLocation="CMSIS-SVD.xsd" >')
+    svd.append('    <vendor>{}</vendor>'.format(vendor))
+    svd.append('    <name>{}</name>'.format(name.upper()))
+    if description is not None:
+        svd.append('    <description><![CDATA[{}]]></description>'.format(reflow(description)))
+    else:
+        fmt = "%Y-%m-%d %H:%M:%S"
+        build_time = datetime.datetime.fromtimestamp(time.time()).strftime(fmt)
+        svd.append('    <description><![CDATA[{}]]></description>'.format(reflow("Litex SoC " + build_time)))
+    svd.append('')
+    svd.append('    <addressUnitBits>8</addressUnitBits>')
+    svd.append('    <width>32</width>')
+    svd.append('    <size>32</size>')
+    svd.append('    <access>read-write</access>')
+    svd.append('    <resetValue>0x00000000</resetValue>')
+    svd.append('    <resetMask>0xFFFFFFFF</resetMask>')
+    svd.append('')
+    svd.append('    <peripherals>')
+
+    for region in documented_regions:
+        csr_address = 0
+        svd.append('        <peripheral>')
+        svd.append('            <name>{}</name>'.format(region.name.upper()))
+        svd.append('            <baseAddress>0x{:08X}</baseAddress>'.format(region.origin))
+        svd.append('            <groupName>{}</groupName>'.format(region.name.upper()))
+        if len(region.sections) > 0:
+            svd.append('            <description><![CDATA[{}]]></description>'.format(
+                reflow(region.sections[0].body())))
+        svd.append('            <registers>')
+        for csr in region.csrs:
+            description = None
+            if hasattr(csr, "description"):
+                description = csr.description
+            if isinstance(csr, _CompoundCSR) and len(csr.simple_csrs) > 1:
+                is_first = True
+                for i in range(len(csr.simple_csrs)):
+                    (start, length, name) = sub_csr_bit_range(
+                        region.busword, csr, i)
+                    if length > 0:
+                        bits_str = "Bits {}-{} of `{}`.".format(
+                            start, start+length, csr.name)
+                    else:
+                        bits_str = "Bit {} of `{}`.".format(
+                            start, csr.name)
+                    if is_first:
+                        if description is not None:
+                            print_svd_register(
+                                csr.simple_csrs[i], csr_address, bits_str + " " + description, length, svd)
+                        else:
+                            print_svd_register(
+                                csr.simple_csrs[i], csr_address, bits_str, length, svd)
+                        is_first = False
+                    else:
+                        print_svd_register(
+                            csr.simple_csrs[i], csr_address, bits_str, length, svd)
+                    csr_address = csr_address + 4
+            else:
+                length = ((csr.size + region.busword - 1) //
+                            region.busword) * region.busword
+                print_svd_register(
+                    csr, csr_address, description, length, svd)
+                csr_address = csr_address + 4
+        svd.append('            </registers>')
+        svd.append('            <addressBlock>')
+        svd.append('                <offset>0</offset>')
+        svd.append('                <size>0x{:x}</size>'.format(csr_address))
+        svd.append('                <usage>registers</usage>')
+        svd.append('            </addressBlock>')
+        if region.name in interrupts:
+            svd.append('            <interrupt>')
+            svd.append('                <name>{}</name>'.format(region.name))
+            svd.append('                <value>{}</value>'.format(interrupts[region.name]))
+            svd.append('            </interrupt>')
+        svd.append('        </peripheral>')
+    svd.append('    </peripherals>')
+    svd.append('    <vendorExtensions>')
+
+    if len(soc.mem_regions) > 0:
+        svd.append('        <memoryRegions>')
+        for region_name, region in soc.mem_regions.items():
+            svd.append('            <memoryRegion>')
+            svd.append('                <name>{}</name>'.format(region_name.upper()))
+            svd.append('                <baseAddress>0x{:08X}</baseAddress>'.format(region.origin))
+            svd.append('                <size>0x{:08X}</size>'.format(region.size))
+            svd.append('            </memoryRegion>')
+        svd.append('        </memoryRegions>')
+
+    svd.append('        <constants>')
+    for name, value in soc.constants.items():
+        svd.append('            <constant name="{}" value="{}" />'.format(name, value))
+    svd.append('        </constants>')
+
+    svd.append('    </vendorExtensions>')
+    svd.append('</device>')
+    return "\n".join(svd)
 
 # Memory.x Export ----------------------------------------------------------------------------------
 

@@ -359,7 +359,6 @@ class AXIBurst2Beat(Module):
             )
         ]
 
-
 # AXI to AXI Lite ----------------------------------------------------------------------------------
 
 class AXI2AXILite(Module):
@@ -833,24 +832,18 @@ class _AXILiteDownConverterWrite(Module):
         dw_from      = len(master.w.data)
         dw_to        = len(slave.w.data)
         ratio        = dw_from//dw_to
-        master_align = log2_int(master.data_width//8)
-        slave_align  = log2_int(slave.data_width//8)
 
         skip         = Signal()
         counter      = Signal(max=ratio)
         aw_ready     = Signal()
         w_ready      = Signal()
         resp         = Signal.like(master.b.resp)
-        addr_counter = Signal(master_align)
 
         # # #
 
-        # Slave address counter
-        self.comb += addr_counter[slave_align:].eq(counter)
-
         # Data path
         self.comb += [
-            slave.aw.addr.eq(Cat(addr_counter, master.aw.addr[master_align:])),
+            slave.aw.addr.eq(master.aw.addr + counter*(dw_to//8)),
             Case(counter, {i: slave.w.data.eq(master.w.data[i*dw_to:]) for i in range(ratio)}),
             Case(counter, {i: slave.w.strb.eq(master.w.strb[i*dw_to//8:]) for i in range(ratio)}),
             master.b.resp.eq(resp),
@@ -930,18 +923,12 @@ class _AXILiteDownConverterRead(Module):
         dw_from      = len(master.r.data)
         dw_to        = len(slave.r.data)
         ratio        = dw_from//dw_to
-        master_align = log2_int(master.data_width//8)
-        slave_align  = log2_int(slave.data_width//8)
 
         skip         = Signal()
         counter      = Signal(max=ratio)
         resp         = Signal.like(master.r.resp)
-        addr_counter = Signal(master_align)
 
         # # #
-
-        # Slave address counter
-        self.comb += addr_counter[slave_align:].eq(counter)
 
         # Data path
         # Shift the data word
@@ -950,7 +937,7 @@ class _AXILiteDownConverterRead(Module):
         self.comb += master.r.data.eq(Cat(r_data[dw_to:], slave.r.data))
         # Connect address, resp
         self.comb += [
-            slave.ar.addr.eq(Cat(addr_counter, master.ar.addr[master_align:])),
+            slave.ar.addr.eq(master.ar.addr + counter*(dw_to//8)),
             master.r.resp.eq(resp),
         ]
 
@@ -1082,6 +1069,48 @@ class AXILiteConverter(Module):
             self.submodules += AXILiteUpConverter(master, slave)
         else:
             self.comb += master.connect(slave)
+
+# AXILite Clock Domain Crossing --------------------------------------------------------------------
+
+class AXILiteClockDomainCrossing(Module):
+    """AXILite Clock Domain Crossing"""
+    def __init__(self, master, slave, cd_from="sys", cd_to="sys"):
+        # Same Clock Domain, direct connection.
+        if cd_from == cd_to:
+            self.comb += [
+                # Write.
+                master.aw.connect(slave.aw),
+                master.w.connect(slave.w),
+                slave.b.connect(master.b),
+                # Read.
+                master.ar.connect(slave.ar),
+                slave.r.connect(master.r),
+            ]
+        # Clock Domain Crossing.
+        else:
+            # Write.
+            aw_cdc = stream.ClockDomainCrossing(master.aw.description, cd_from,   cd_to)
+            w_cdc  = stream.ClockDomainCrossing(master.w.description,  cd_from,   cd_to)
+            b_cdc  = stream.ClockDomainCrossing(master.b.description,    cd_to, cd_from)
+            self.submodules += aw_cdc, w_cdc, b_cdc
+            self.comb += [
+                master.aw.connect(aw_cdc.sink),
+                aw_cdc.source.connect(slave.aw),
+                master.w.connect(w_cdc.sink),
+                w_cdc.source.connect(slave.w),
+                slave.b.connect(b_cdc.sink),
+                b_cdc.source.connect(master.b),
+            ]
+            # Read.
+            ar_cdc = stream.ClockDomainCrossing(master.ar.description, cd_from,   cd_to)
+            r_cdc  = stream.ClockDomainCrossing(master.r.description,    cd_to, cd_from)
+            self.submodules += ar_cdc, r_cdc
+            self.comb += [
+                master.ar.connect(ar_cdc.sink),
+                ar_cdc.source.connect(slave.ar),
+                slave.r.connect(r_cdc.sink),
+                r_cdc.source.connect(master.r),
+            ]
 
 # AXILite Timeout ----------------------------------------------------------------------------------
 

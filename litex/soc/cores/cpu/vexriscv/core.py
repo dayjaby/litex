@@ -19,6 +19,7 @@ from litex.soc.interconnect import wishbone
 from litex.soc.interconnect.csr import *
 from litex.soc.cores.cpu import CPU, CPU_GCC_TRIPLE_RISCV32
 
+# Variants -----------------------------------------------------------------------------------------
 
 CPU_VARIANTS = {
     "minimal":          "VexRiscv_Min",
@@ -30,7 +31,9 @@ CPU_VARIANTS = {
     "imac":             "VexRiscv_IMAC",
     "imac+debug":       "VexRiscv_IMACDebug",
     "full":             "VexRiscv_Full",
+    "full+cfu":         "VexRiscv_FullCfu",
     "full+debug":       "VexRiscv_FullDebug",
+    "full+cfu+debug":   "VexRiscv_FullCfuDebug",
     "linux":            "VexRiscv_Linux",
     "linux+debug":      "VexRiscv_LinuxDebug",
     "linux+no-dsp":     "VexRiscv_LinuxNoDspFmax",
@@ -38,6 +41,7 @@ CPU_VARIANTS = {
     "secure+debug":     "VexRiscv_SecureDebug",
 }
 
+# GCC Flags ----------------------------------------------------------------------------------------
 
 GCC_FLAGS = {
     #                               /-------- Base ISA
@@ -56,7 +60,9 @@ GCC_FLAGS = {
     "imac":             "-march=rv32imac   -mabi=ilp32",
     "imac+debug":       "-march=rv32imac   -mabi=ilp32",
     "full":             "-march=rv32im     -mabi=ilp32",
+    "full+cfu":         "-march=rv32im     -mabi=ilp32",
     "full+debug":       "-march=rv32im     -mabi=ilp32",
+    "full+cfu+debug":   "-march=rv32im     -mabi=ilp32",
     "linux":            "-march=rv32ima    -mabi=ilp32",
     "linux+debug":      "-march=rv32ima    -mabi=ilp32",
     "linux+no-dsp":     "-march=rv32ima    -mabi=ilp32",
@@ -64,6 +70,7 @@ GCC_FLAGS = {
     "secure+debug":     "-march=rv32ima    -mabi=ilp32",
 }
 
+# VexRiscv Timer -----------------------------------------------------------------------------------
 
 class VexRiscvTimer(Module, AutoCSR):
     def __init__(self):
@@ -83,6 +90,7 @@ class VexRiscvTimer(Module, AutoCSR):
 
         self.comb += self.interrupt.eq(time >= time_cmp)
 
+# VexRiscv -----------------------------------------------------------------------------------------
 
 class VexRiscv(CPU, AutoCSR):
     name                 = "vexriscv"
@@ -93,8 +101,9 @@ class VexRiscv(CPU, AutoCSR):
     gcc_triple           = CPU_GCC_TRIPLE_RISCV32
     linker_output_format = "elf32-littleriscv"
     nop                  = "nop"
-    io_regions           = {0x80000000: 0x80000000} # origin, length
+    io_regions           = {0x80000000: 0x80000000} # Origin, Length
 
+    # Memory Mapping.
     @property
     def mem_map(self):
         return {
@@ -105,13 +114,14 @@ class VexRiscv(CPU, AutoCSR):
             "vexriscv_debug": 0xf00f0000,
         }
 
+    # GCC Flags.
     @property
     def gcc_flags(self):
         flags = GCC_FLAGS[self.variant]
         flags += " -D__vexriscv__"
         return flags
 
-    def __init__(self, platform, variant="standard", timer_enabled=True):
+    def __init__(self, platform, variant="standard", with_timer=False):
         self.platform         = platform
         self.variant          = variant
         self.human_name       = CPU_VARIANTS.get(variant, "VexRiscv")
@@ -120,49 +130,58 @@ class VexRiscv(CPU, AutoCSR):
         self.interrupt        = Signal(32)
         self.ibus             = ibus = wishbone.Interface()
         self.dbus             = dbus = wishbone.Interface()
-        self.periph_buses     = [ibus, dbus]
-        self.memory_buses     = []
+        self.periph_buses     = [ibus, dbus] # Peripheral buses (Connected to main SoC's bus).
+        self.memory_buses     = []           # Memory buses (Connected directly to LiteDRAM).
 
         # # #
 
         self.cpu_params = dict(
-                i_clk                    = ClockSignal(),
-                i_reset                  = ResetSignal() | self.reset,
+            i_clk                    = ClockSignal("sys"),
+            i_reset                  = ResetSignal("sys") | self.reset,
 
-                i_externalInterruptArray = self.interrupt,
-                i_timerInterrupt         = 0,
-                i_softwareInterrupt      = 0,
+            i_externalInterruptArray = self.interrupt,
+            i_timerInterrupt         = 0,
+            i_softwareInterrupt      = 0,
 
-                o_iBusWishbone_ADR      = ibus.adr,
-                o_iBusWishbone_DAT_MOSI = ibus.dat_w,
-                o_iBusWishbone_SEL      = ibus.sel,
-                o_iBusWishbone_CYC      = ibus.cyc,
-                o_iBusWishbone_STB      = ibus.stb,
-                o_iBusWishbone_WE       = ibus.we,
-                o_iBusWishbone_CTI      = ibus.cti,
-                o_iBusWishbone_BTE      = ibus.bte,
-                i_iBusWishbone_DAT_MISO = ibus.dat_r,
-                i_iBusWishbone_ACK      = ibus.ack,
-                i_iBusWishbone_ERR      = ibus.err,
+            o_iBusWishbone_ADR      = ibus.adr,
+            o_iBusWishbone_DAT_MOSI = ibus.dat_w,
+            o_iBusWishbone_SEL      = ibus.sel,
+            o_iBusWishbone_CYC      = ibus.cyc,
+            o_iBusWishbone_STB      = ibus.stb,
+            o_iBusWishbone_WE       = ibus.we,
+            o_iBusWishbone_CTI      = ibus.cti,
+            o_iBusWishbone_BTE      = ibus.bte,
+            i_iBusWishbone_DAT_MISO = ibus.dat_r,
+            i_iBusWishbone_ACK      = ibus.ack,
+            i_iBusWishbone_ERR      = ibus.err,
 
-                o_dBusWishbone_ADR      = dbus.adr,
-                o_dBusWishbone_DAT_MOSI = dbus.dat_w,
-                o_dBusWishbone_SEL      = dbus.sel,
-                o_dBusWishbone_CYC      = dbus.cyc,
-                o_dBusWishbone_STB      = dbus.stb,
-                o_dBusWishbone_WE       = dbus.we,
-                o_dBusWishbone_CTI      = dbus.cti,
-                o_dBusWishbone_BTE      = dbus.bte,
-                i_dBusWishbone_DAT_MISO = dbus.dat_r,
-                i_dBusWishbone_ACK      = dbus.ack,
-                i_dBusWishbone_ERR      = dbus.err
-            )
+            o_dBusWishbone_ADR      = dbus.adr,
+            o_dBusWishbone_DAT_MOSI = dbus.dat_w,
+            o_dBusWishbone_SEL      = dbus.sel,
+            o_dBusWishbone_CYC      = dbus.cyc,
+            o_dBusWishbone_STB      = dbus.stb,
+            o_dBusWishbone_WE       = dbus.we,
+            o_dBusWishbone_CTI      = dbus.cti,
+            o_dBusWishbone_BTE      = dbus.bte,
+            i_dBusWishbone_DAT_MISO = dbus.dat_r,
+            i_dBusWishbone_ACK      = dbus.ack,
+            i_dBusWishbone_ERR      = dbus.err
+        )
 
-        if timer_enabled:
+        if with_timer:
             self.add_timer()
 
         if "debug" in variant:
             self.add_debug()
+
+    def set_reset_address(self, reset_address):
+        assert not hasattr(self, "reset_address")
+        self.reset_address = reset_address
+        self.cpu_params.update(i_externalResetVector=Signal(32, reset=reset_address))
+
+    def add_timer(self):
+        self.submodules.timer = VexRiscvTimer()
+        self.cpu_params.update(i_timerInterrupt=self.timer.interrupt)
 
     def add_debug(self):
         debug_reset = Signal()
@@ -186,10 +205,8 @@ class VexRiscv(CPU, AutoCSR):
 
         self.debug_bus = wishbone.Interface()
 
-        self.sync += [
-            self.debug_bus.dat_r.eq(self.o_rsp_data),
-            debug_reset.eq(reset_debug_logic | ResetSignal()),
-        ]
+        self.sync += self.debug_bus.dat_r.eq(self.o_rsp_data)
+        self.sync += debug_reset.eq(reset_debug_logic | ResetSignal())
 
         self.sync += [
             # CYC is held high for the duration of the transfer.
@@ -237,9 +254,9 @@ class VexRiscv(CPU, AutoCSR):
         ]
 
         self.cpu_params.update(
-            i_reset=ResetSignal() | self.reset | debug_reset,
-            i_iBusWishbone_ERR=self.ibus.err | ibus_err,
-            i_dBusWishbone_ERR=self.dbus.err | dbus_err,
+            i_reset = ResetSignal() | self.reset | debug_reset,
+            i_iBusWishbone_ERR              = self.ibus.err | ibus_err,
+            i_dBusWishbone_ERR              = self.dbus.err | dbus_err,
             i_debugReset                    = ResetSignal(),
             i_debug_bus_cmd_valid           = self.i_cmd_valid,
             i_debug_bus_cmd_payload_wr      = self.i_cmd_payload_wr,
@@ -250,14 +267,63 @@ class VexRiscv(CPU, AutoCSR):
             o_debug_resetOut                = self.o_resetOut
         )
 
-    def set_reset_address(self, reset_address):
-        assert not hasattr(self, "reset_address")
-        self.reset_address = reset_address
-        self.cpu_params.update(i_externalResetVector=Signal(32, reset=reset_address))
+    def add_cfu(self, cfu_filename):
+        # Check CFU presence.
+        if not os.path.exists(cfu_filename):
+            raise OSError(f"Unable to find VexRiscv CFU plugin {cfu_filename}.")
 
-    def add_timer(self):
-        self.submodules.timer = VexRiscvTimer()
-        self.cpu_params.update(i_timerInterrupt=self.timer.interrupt)
+        # CFU Layout.
+        cfu_bus_layout = [
+            ("cmd", [
+                ("valid", 1),
+                ("ready", 1),
+                ("payload", [
+                    ("function_id", 10),
+                    ("inputs_0", 32),
+                    ("inputs_1", 32),
+                ]),
+            ]),
+            ("rsp", [
+                ("valid", 1),
+                ("ready", 1),
+                ("payload", [
+                    ("response_ok", 1),
+                    ("outputs_0", 32),
+                ]),
+            ]),
+        ]
+
+        # CFU Bus.
+        self.cfu_bus = cfu_bus = Record(cfu_bus_layout)
+
+        # Add CFU.
+        self.specials += Instance("Cfu",
+            i_cmd_valid                = cfu_bus.cmd.valid,
+            o_cmd_ready                = cfu_bus.cmd.ready,
+            i_cmd_payload_function_id  = cfu_bus.cmd.payload.function_id,
+            i_cmd_payload_inputs_0     = cfu_bus.cmd.payload.inputs_0,
+            i_cmd_payload_inputs_1     = cfu_bus.cmd.payload.inputs_1,
+            o_rsp_valid                = cfu_bus.rsp.valid,
+            i_rsp_ready                = cfu_bus.rsp.ready,
+            o_rsp_payload_response_ok  = cfu_bus.rsp.payload.response_ok,
+            o_rsp_payload_outputs_0    = cfu_bus.rsp.payload.outputs_0,
+            i_clk                      = ClockSignal("sys"),
+            i_reset                    = ResetSignal("sys"),
+        )
+        self.platform.add_source(cfu_filename)
+
+        # Connect CFU to CPU.
+        self.cpu_params.update(
+            o_CfuPlugin_bus_cmd_valid                = cfu_bus.cmd.valid,
+            i_CfuPlugin_bus_cmd_ready                = cfu_bus.cmd.ready,
+            o_CfuPlugin_bus_cmd_payload_function_id  = cfu_bus.cmd.payload.function_id,
+            o_CfuPlugin_bus_cmd_payload_inputs_0     = cfu_bus.cmd.payload.inputs_0,
+            o_CfuPlugin_bus_cmd_payload_inputs_1     = cfu_bus.cmd.payload.inputs_1,
+            i_CfuPlugin_bus_rsp_valid                = cfu_bus.rsp.valid,
+            o_CfuPlugin_bus_rsp_ready                = cfu_bus.rsp.ready,
+            i_CfuPlugin_bus_rsp_payload_response_ok  = cfu_bus.rsp.payload.response_ok,
+            i_CfuPlugin_bus_rsp_payload_outputs_0    = cfu_bus.rsp.payload.outputs_0,
+        )
 
     @staticmethod
     def add_sources(platform, variant="standard"):
@@ -267,8 +333,8 @@ class VexRiscv(CPU, AutoCSR):
 
     def add_soc_components(self, soc, soc_region_cls):
         if "debug" in self.variant:
-            soc.bus.add_slave("vexriscv_debug", self.debug_bus, region=soc_region_cls(origin=soc.mem_map.get("vexriscv_debug"), size=0x100, cached=False))
-
+            soc.bus.add_slave("vexriscv_debug", self.debug_bus, region=soc_region_cls(
+                origin=soc.mem_map.get("vexriscv_debug"), size=0x100, cached=False))
 
     def use_external_variant(self, variant_filename):
         self.external_variant = True

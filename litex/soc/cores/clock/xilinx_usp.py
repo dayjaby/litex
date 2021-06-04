@@ -36,12 +36,20 @@ class USPPLL(XilinxClocking):
         config = self.compute_config()
         pll_fb = Signal()
         self.params.update(
-            p_STARTUP_WAIT="FALSE", o_LOCKED=self.locked, i_RST=self.reset,
+            # Global.
+            p_STARTUP_WAIT = "FALSE",
+            i_RST          = self.reset,
+            i_PWRDWN       = self.power_down,
+            o_LOCKED       = self.locked,
 
-            # VCO
-            p_REF_JITTER1=0.01, p_CLKIN1_PERIOD=1e9/self.clkin_freq,
-            p_CLKFBOUT_MULT=config["clkfbout_mult"], p_DIVCLK_DIVIDE=config["divclk_divide"],
-            i_CLKIN1=self.clkin, i_CLKFBIN=pll_fb, o_CLKFBOUT=pll_fb,
+            # VCO.
+            p_REF_JITTER1   = 0.01,
+            p_CLKIN1_PERIOD = 1e9/self.clkin_freq,
+            p_CLKFBOUT_MULT = config["clkfbout_mult"],
+            p_DIVCLK_DIVIDE = config["divclk_divide"],
+            i_CLKIN1        = self.clkin,
+            i_CLKFBIN       = pll_fb,
+            o_CLKFBOUT      = pll_fb,
         )
         for n, (clk, f, p, m) in sorted(self.clkouts.items()):
             self.params["p_CLKOUT{}_DIVIDE".format(n)] = config["clkout{}_divide".format(n)]
@@ -74,12 +82,20 @@ class USPMMCM(XilinxClocking):
         config = self.compute_config()
         mmcm_fb = Signal()
         self.params.update(
-            p_BANDWIDTH="OPTIMIZED", o_LOCKED=self.locked, i_RST=self.reset,
+            # Global.
+            p_BANDWIDTH = "OPTIMIZED",
+            i_RST       = self.reset,
+            i_PWRDWN    = self.power_down,
+            o_LOCKED    = self.locked,
 
-            # VCO
-            p_REF_JITTER1=0.01, p_CLKIN1_PERIOD=1e9/self.clkin_freq,
-            p_CLKFBOUT_MULT_F=config["clkfbout_mult"], p_DIVCLK_DIVIDE=config["divclk_divide"],
-            i_CLKIN1=self.clkin, i_CLKFBIN=mmcm_fb, o_CLKFBOUT=mmcm_fb,
+            # VCO.
+            p_REF_JITTER1     = 0.01,
+            p_CLKIN1_PERIOD   = 1e9/self.clkin_freq,
+            p_CLKFBOUT_MULT_F = config["clkfbout_mult"],
+            p_DIVCLK_DIVIDE   = config["divclk_divide"],
+            i_CLKIN1          = self.clkin,
+            i_CLKFBIN         = mmcm_fb,
+            o_CLKFBOUT        = mmcm_fb,
         )
         for n, (clk, f, p, m) in sorted(self.clkouts.items()):
             if n == 0:
@@ -93,7 +109,6 @@ class USPMMCM(XilinxClocking):
 
 class USPIDELAYCTRL(Module):
     def __init__(self, cd_ref, cd_sys, reset_cycles=64, ready_cycles=64):
-        cd_sys.rst.reset = 1
         self.clock_domains.cd_ic = ClockDomain()
         ic_reset_counter = Signal(max=reset_cycles, reset=reset_cycles-1)
         ic_reset         = Signal(reset=1)
@@ -109,6 +124,7 @@ class USPIDELAYCTRL(Module):
         ic_ready         = Signal()
         self.comb += self.cd_ic.clk.eq(cd_sys.clk)
         self.sync.ic += [
+            cd_sys.rst.eq(1),
             If(ic_ready,
                 If(ic_ready_counter != 0,
                     ic_ready_counter.eq(ic_ready_counter - 1)

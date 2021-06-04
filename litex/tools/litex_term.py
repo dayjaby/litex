@@ -122,6 +122,7 @@ class BridgeUART:
             elif not self.rxempty.read():
                 length = 1
             else:
+                time.sleep(1e-3)
                 continue
             r = self.bus.read(self.rxtx.addr, length=length, burst="fixed")
             for v in r:
@@ -132,9 +133,10 @@ class BridgeUART:
 from litex.build.openocd import OpenOCD
 
 class JTAGUART:
-    def __init__(self, config="openocd_xc7_ft2232.cfg", port=20000):
+    def __init__(self, config="openocd_xc7_ft2232.cfg", port=20000, chain=1):
         self.config = config
         self.port   = port
+        self.chain  = chain
 
     def open(self):
         self.file, self.name = pty.openpty()
@@ -155,7 +157,7 @@ class JTAGUART:
 
     def jtag2tcp(self):
         prog = OpenOCD(self.config)
-        prog.stream(self.port)
+        prog.stream(self.port, self.chain)
 
     def pty2tcp(self):
         while True:
@@ -539,6 +541,7 @@ def _get_args():
 
     parser.add_argument("--jtag-name",   default="jtag_uart",                help="JTAG UART type: jtag_uart (default), jtag_atlantic")
     parser.add_argument("--jtag-config", default="openocd_xc7_ft2232.cfg",   help="OpenOCD JTAG configuration file for jtag_uart")
+    parser.add_argument("--jtag-chain",  default=1,                          help="JTAG chain.")
     return parser.parse_args()
 
 def main():
@@ -559,7 +562,7 @@ def main():
             term.payload_length = 128
             term.delay          = 1e-6
         elif args.jtag_name == "jtag_uart":
-            bridge = JTAGUART(config=args.jtag_config)
+            bridge = JTAGUART(config=args.jtag_config, chain=int(args.jtag_chain))
             bridge.open()
             port = os.ttyname(bridge.name)
         else:

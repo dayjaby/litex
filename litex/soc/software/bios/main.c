@@ -69,7 +69,7 @@ static void boot_sequence(void)
 #ifdef CSR_ETHPHY_MODE_DETECTION_MODE_ADDR
 	eth_mode();
 #endif
-	netboot();
+	netboot(0, NULL);
 #endif
 	printf("No boot medium found\n");
 }
@@ -99,7 +99,7 @@ int main(int i, char **c)
 	printf("\e[1m     /____/_/\\__/\\__/_/|_|\e[0m\n");
 	printf("\e[1m   Build your hardware, easily!\e[0m\n");
 	printf("\n");
-	printf(" (c) Copyright 2012-2020 Enjoy-Digital\n");
+	printf(" (c) Copyright 2012-2021 Enjoy-Digital\n");
 	printf(" (c) Copyright 2007-2015 M-Labs\n");
 	printf("\n");
 #ifdef CONFIG_WITH_BUILD_TIME
@@ -163,6 +163,14 @@ int main(int i, char **c)
 #endif
 #ifdef CSR_SPIFLASH_MMAP_BASE
 	spiflash_init();
+#endif
+
+#ifdef CSR_VIDEO_FRAMEBUFFER_BASE
+	/* Initialize Video Framebuffer FIXME: Move */
+	video_framebuffer_vtg_enable_write(0);
+	video_framebuffer_dma_enable_write(0);
+	video_framebuffer_vtg_enable_write(1);
+	video_framebuffer_dma_enable_write(1);
 #endif
 
 	if(sdr_ok) {
