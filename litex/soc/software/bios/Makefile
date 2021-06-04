@@ -8,12 +8,13 @@ endif
 
 OBJECTS = isr.o			\
 	  boot-helper.o		\
-	  boot.o			\
-	  helpers.o			\
+	  boot.o		\
+	  helpers.o		\
 	  cmd_bios.o		\
-	  cmd_mem.o			\
+	  cmd_mem.o		\
 	  cmd_boot.o		\
-	  cmd_i2c.o			\
+	  cmd_i2c.o		\
+	  cmd_spi.o		\
 	  cmd_spiflash.o	\
 	  cmd_litedram.o	\
 	  cmd_liteeth.o		\
