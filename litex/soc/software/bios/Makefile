@@ -20,6 +20,7 @@ OBJECTS = isr.o			\
 	  cmd_liteeth.o		\
 	  cmd_litesdcard.o  \
 	  cmd_litesata.o    \
+	  cmd_dw1000.o      \
 	  main.o
 
 ifneq "$(or $(TERM_NO_COMPLETE),$(TERM_MINI))" ""

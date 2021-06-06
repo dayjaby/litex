@@ -19,7 +19,7 @@ import shutil
 
 from litex import get_data_mod
 from litex.build.tools import write_to_file
-from litex.soc.integration import export, soc_core, jinja
+from litex.soc.integration import export, soc_core
 from litex.soc.cores import cpu
 
 # Helpers ------------------------------------------------------------------------------------------
@@ -107,10 +107,6 @@ class Builder:
 
         # List software packages.
         self.software_packages = []
-        self.jinja_env         = jinja.Environment(
-            templates=[os.path.abspath(os.path.expanduser(path)) for path in jinja_templates]
-        )
-        self.filter_templates = filter_templates
         for name in soc_software_packages:
             self.add_software_package(name)
 
@@ -231,6 +227,7 @@ class Builder:
             dst_dir  = os.path.join(self.software_dir, name)
             makefile = os.path.join(src_dir, "Makefile")
             if self.compile_software:
+                print("Compiling software!")
                 subprocess.check_call(["make", "-C", dst_dir, "-f", makefile])
 
     def _initialize_rom_software(self):
@@ -325,6 +322,4 @@ def builder_argdict(args):
         "csr_svd":          args.csr_svd,
         "memory_x":         args.memory_x,
         "generate_doc":     args.doc,
-        "jinja_templates":  args.jinja_templates,
-        "filter_templates": args.filter_templates
     }

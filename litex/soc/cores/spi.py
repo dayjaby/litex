@@ -20,7 +20,7 @@ class SPIMaster(Module, AutoCSR):
     configurable data_width and frequency.
     """
     pads_layout = [("clk", 1), ("cs_n", 1), ("mosi", 1), ("miso", 1)]
-    def __init__(self, pads, data_width, sys_clk_freq, spi_clk_freq, with_csr=True, mode="raw"):
+    def __init__(self, pads, data_width, sys_clk_freq, spi_clk_freq, with_csr=True, manual_cs=False, mode="raw"):
         assert mode in ["raw", "aligned"]
         if pads is None:
             pads = Record(self.pads_layout)
@@ -105,7 +105,10 @@ class SPIMaster(Module, AutoCSR):
         # Chip Select generation -------------------------------------------------------------------
         if hasattr(pads, "cs_n"):
             for i in range(len(pads.cs_n)):
-                self.sync += pads.cs_n[i].eq(~self.cs[i] | ~cs_enable)
+                if manual_cs:
+                    self.sync += pads.cs_n[i].eq(~self.cs[i])
+                else:
+                    self.sync += pads.cs_n[i].eq(~self.cs[i] | ~cs_enable)
 
         # Master Out Slave In (MOSI) generation (generated on spi_clk falling edge) ----------------
         mosi_data  = Signal(data_width)

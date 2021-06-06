@@ -56,11 +56,11 @@ CXXFLAGS = $(COMMONFLAGS) -std=c++11 -I$(SOC_DIRECTORY)/software/include/basec++
 LDFLAGS = -nostdlib -nodefaultlibs -L$(BUILDINC_DIRECTORY)
 
 define compilexx
-$(CX) -c $(CXXFLAGS) $(1) $< -o $@
+$(CX) -O0 -c $(CXXFLAGS) $(1) $< -o $@
 endef
 
 define compile
-$(CC) -c $(CFLAGS) $(1) $< -o $@
+$(CC) -O0 -c $(CFLAGS) $(1) $< -o $@
 endef
 
 define assemble
