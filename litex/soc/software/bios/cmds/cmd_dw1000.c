@@ -16,9 +16,11 @@ static void dw_xfer(uint8_t* tx_buf, uint32_t tx_len, uint8_t* rx_buf, uint32_t 
 	uint32_t timeout = 500;
 	spi_master_cs_write(1);
         busy_wait_us(500);
+	/*
 	spi_master_cs_write(0);
         busy_wait_us(100);
 	spi_master_cs_write(1);
+	*/
 	for(int j=0; j<tx_len+rx_len; ++j)
 	{
 		if (j<tx_len) {
@@ -29,7 +31,7 @@ static void dw_xfer(uint8_t* tx_buf, uint32_t tx_len, uint8_t* rx_buf, uint32_t 
 		}
 		spi_master_control_start_write(1);
 		// while(spi_master_status_done_read() != 0) {}
-		spi_master_control_start_write(0);
+		// spi_master_control_start_write(0);
 		while(spi_master_status_done_read() == 0) {}
 		if (j>=tx_len) {
 			rx_buf[j-tx_len] = spi_master_miso_read();
