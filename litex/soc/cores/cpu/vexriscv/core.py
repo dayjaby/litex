@@ -121,7 +121,7 @@ class VexRiscv(CPU, AutoCSR):
         flags += " -D__vexriscv__"
         return flags
 
-    def __init__(self, platform, variant="standard", with_timer=False):
+    def __init__(self, platform, variant="standard", with_timer=True):
         self.platform         = platform
         self.variant          = variant
         self.human_name       = CPU_VARIANTS.get(variant, "VexRiscv")

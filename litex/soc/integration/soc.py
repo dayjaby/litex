@@ -887,7 +887,7 @@ class SoC(Module):
                 colorer(", ".join(cpu_cls.variants))))
             raise
         self.check_if_exists("cpu")
-        self.submodules.cpu = cpu_cls(self.platform, variant)
+        self.submodules.cpu = cpu_cls(self.platform, variant, with_timer=True)
 
         # Add optional CFU plugin.
         if "cfu" in variant and hasattr(self.cpu, "add_cfu"):
