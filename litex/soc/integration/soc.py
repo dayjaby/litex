@@ -1142,6 +1142,13 @@ class LiteXSoC(SoC):
             self.add_config("WITH_BUILD_TIME")
         setattr(self.submodules, name, Identifier(identifier))
 
+    # Add PWM
+    def add_pwm(self, name):
+        from litex.soc.cores import pwm
+        self.submodules.pwm = pwm.PWM(
+            pads     = self.platform.request(name)
+        )
+
     # Add UART -------------------------------------------------------------------------------------
     def add_uart(self, name, baudrate=115200, fifo_depth=16):
         from litex.soc.cores import uart
