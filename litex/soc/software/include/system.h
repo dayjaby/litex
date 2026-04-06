@@ -10,6 +10,8 @@ extern "C" {
 #ifndef HAS_CLEAN_CPU_DCACHE_RANGE
 static inline void clean_cpu_dcache_range(void *start_addr, size_t size)
 {
+	(void)start_addr;
+	(void)size;
         flush_cpu_dcache();
 }
 #endif
@@ -17,6 +19,8 @@ static inline void clean_cpu_dcache_range(void *start_addr, size_t size)
 #ifndef HAS_FLUSH_CPU_DCACHE_RANGE
 static inline void flush_cpu_dcache_range(void *start_addr, size_t size)
 {
+	(void)start_addr;
+	(void)size;
         flush_cpu_dcache();
 }
 #endif
@@ -24,6 +28,8 @@ static inline void flush_cpu_dcache_range(void *start_addr, size_t size)
 #ifndef HAS_INVD_CPU_DCACHE_RANGE
 static inline void invd_cpu_dcache_range(void *start_addr, size_t size)
 {
+	(void)start_addr;
+	(void)size;
         flush_cpu_dcache();
 }
 #endif
